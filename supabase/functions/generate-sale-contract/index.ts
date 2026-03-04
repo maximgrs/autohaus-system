@@ -189,7 +189,7 @@ serve(async (req: Request) => {
             .single();
         if (vehErr) throw vehErr;
 
-        // --- contract details (includes cond_overall)
+        // --- contract details (includes cond_overall)d
         const { data: details, error: detErr } = await supabase
             .from("sale_contract_details")
             .select(
