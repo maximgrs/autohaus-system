@@ -1,0 +1,72 @@
+//Header
+Verkäufer: Text3
+Email: Text4
+Telefon: Text8
+geboren am: Text9
+Erstzulassung: Text10
+Farbe: Text11
+Frau/Herr/Firma: Text13
+Adresse: Text14
+Marke: Text15
+Modell/Type: Text16
+Fin: Text18
+Motornummer: Text19
+Kilometerstand bei Vertragsabschluss: Text20
+
+//Beurteilung Spalte A
+Klasse 1: Button 22
+Klasse 2: Button 27
+Klasse 3: Button 36
+Klasse 4: Button 37
+
+//Beurteilung Spalte B
+Klasse 1: Button 23
+Klasse 2: Button 28
+Klasse 3: Button 35
+Klasse 4: Button 38
+
+//Beurteilung Spalte C
+Klasse 1: Button 24
+Klasse 2: Button 29
+Klasse 3: Button 34
+Klasse 4: Button 40
+
+//Beurteilung Spalte D
+Klasse 1: Button 25
+Klasse 2: Button 30
+Klasse 3: Button 33
+Klasse 4: Button 41
+
+//Beurteilung Spalte E
+Klasse 1: Button 26
+Klasse 2: Button 31
+Klasse 3: Button 32
+Klasse 4: Button 42
+
+
+//Zahlungsart
+Bar: Button 43
+Kredit: Button 45
+Überweisung: Button 46
+Leasing: Button 47
+
+Gesamtpreis inkl Steuern und NOVA: Text 49
+Anzahlungsbetrag: Text 50
+
+Sonstige Vereinbarungen: Text 51
+Restlicher Betrag von: Text 53
+aufgeteilt in: Text 55
+Raten ist zu zahlen bis zum: Text 56
+
+Das Fahrzeug ist nach seinem Zustand: Text 58
+
+//Footer
+Ort: Text 59
+am: Text 60
+Verkäufer: Text 61
+Käufer: Text 62
+
+//Lettzte Zeile
+Ort: Text 64
+Datum: Text 65
+Käufer: Text 63
