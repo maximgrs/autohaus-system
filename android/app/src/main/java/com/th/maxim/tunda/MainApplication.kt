@@ -1,4 +1,4 @@
-package com.tunda
+package com.th.maxim.tunda
 
 import android.app.Application
 import android.content.res.Configuration
