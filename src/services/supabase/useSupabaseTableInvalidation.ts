@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from "react";
 import { useFocusEffect } from "expo-router";
+
 import { type QueryKey, useQueryClient } from "@tanstack/react-query";
 
 import { supabase } from "@/src/lib/supabase";
@@ -29,13 +30,20 @@ export type SupabaseTableInvalidationOptions = {
 
     /** Optional explicit channel name */
     channelName?: string;
+
+    /**
+     * Backwards-compatible alias (some dashboards already use `channel`)
+     * Prefer `channelName` going forward.
+     */
+    channel?: string;
 };
 
 function normalizeTables(opts: SupabaseTableInvalidationOptions): string[] {
     const fromSingle = String(opts.table ?? "").trim();
-    const fromMany = (opts.tables ?? []).map((t) => String(t).trim()).filter(
-        Boolean,
-    );
+    const fromMany = (opts.tables ?? [])
+        .map((t) => String(t).trim())
+        .filter(Boolean);
+
     const list = fromSingle ? [fromSingle, ...fromMany] : fromMany;
 
     // de-dupe while preserving order
@@ -53,10 +61,13 @@ export function useSupabaseTableInvalidation(
     const enabled = opts.enabled ?? true;
     const debounceMs = Math.max(0, Number(opts.debounceMs ?? 600));
 
+    // Important: do NOT depend on opts.tables by reference (array literals would resubscribe every render)
+    const tablesInputKey = (opts.tables ?? []).join("|");
     const tables = useMemo(() => normalizeTables(opts), [
         opts.table,
-        opts.tables,
+        tablesInputKey,
     ]);
+
     const tablesKey = useMemo(() => tables.slice().sort().join("|"), [tables]);
 
     // Keep latest callbacks/keys without causing resubscribe loops
@@ -93,9 +104,10 @@ export function useSupabaseTableInvalidation(
 
     const schedule = useCallback(() => {
         if (pendingRef.current) return;
-        pendingRef.current = true;
 
+        pendingRef.current = true;
         if (timerRef.current) clearTimeout(timerRef.current);
+
         timerRef.current = setTimeout(flush, debounceMs);
     }, [debounceMs, flush]);
 
@@ -104,19 +116,17 @@ export function useSupabaseTableInvalidation(
             if (!enabled) return;
             if (!tables.length) return;
 
-            const name = String(opts.channelName ?? "").trim() ||
+            const explicitName = String(opts.channelName ?? opts.channel ?? "")
+                .trim();
+            const name = explicitName ||
                 `invalidate:${schema}:${tablesKey}:${event}`;
 
             const channel = supabase.channel(name);
 
             for (const table of tables) {
-                channel.on(
-                    "postgres_changes",
-                    { event, schema, table },
-                    () => {
-                        schedule();
-                    },
-                );
+                channel.on("postgres_changes", { event, schema, table }, () => {
+                    schedule();
+                });
             }
 
             channel.subscribe();
@@ -125,6 +135,7 @@ export function useSupabaseTableInvalidation(
                 if (timerRef.current) clearTimeout(timerRef.current);
                 timerRef.current = null;
                 pendingRef.current = false;
+
                 supabase.removeChannel(channel);
             };
         }, [
@@ -132,10 +143,10 @@ export function useSupabaseTableInvalidation(
             event,
             schema,
             schedule,
-            tables.length,
             tablesKey,
+            tablesInputKey,
             opts.channelName,
-            tables,
+            opts.channel,
         ]),
     );
 }
