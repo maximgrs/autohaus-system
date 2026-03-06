@@ -1,5 +1,11 @@
 // src/screens/tasks/DealerDashboardShared.tsx
-import React, { useCallback, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -8,17 +14,15 @@ import {
   Text,
   View,
 } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
 
 import Screen from "@/src/components/ui/Screen";
 import FilterChips, { type ChipOption } from "@/src/components/ui/FilterChips";
 import DashboardCard from "@/src/components/ui/DashboardCard";
 
-import { useAllowedEmployees } from "@/src/features/session/appAccount.service";
-import {
-  fetchDealerDashboardV2,
-  type DealerDashboardItem,
-} from "@/src/features/sales/dealerDashboard.service";
+import { useAllowedEmployees } from "@/src/features/employees/useAllowedEmployees";
+import { useDealerDashboardSharedQuery } from "@/src/features/sales/hooks/useDealerDashboardSharedQuery";
+import { type DealerDashboardItem } from "@/src/features/sales/dealerDashboard.service";
 
 type Filter = "all" | "open" | "ready" | "sold";
 
@@ -29,49 +33,64 @@ const FILTERS: ChipOption<Filter>[] = [
   { key: "sold", label: "verkauft" },
 ];
 
-function titleFrom(item: DealerDashboardItem): string {
-  const carx = (item as any).carx_data ?? {};
+// Stable empty array -> fixes `items ?? []` dependency warning
+const EMPTY_ITEMS: DealerDashboardItem[] = [];
+
+function titleFrom(item: DealerDashboardItem) {
+  const carx = (item as any).carx_data ?? null;
   const brand = String(carx?.brand_txt ?? carx?.brand_name ?? "").trim();
   const model = String(carx?.model_name ?? carx?.model_txt ?? "").trim();
-  const compact = [brand, model].filter(Boolean).join(" ").trim();
-  if (compact) return compact;
-  return (item as any).draft_model?.trim()
-    ? (item as any).draft_model
-    : ((item as any).vin ?? "Fahrzeug");
+  const out = [brand, model].filter(Boolean).join(" ").trim();
+  return out || String((item as any).vin ?? "Fahrzeug");
+}
+
+function subtitleFrom(item: DealerDashboardItem) {
+  const stage = String((item as any).stage ?? "");
+  if (stage === "ready") return "Fertig für Verkauf";
+  if (stage === "sold") return "Verkauft";
+  const ss = String((item as any).sale_status ?? "");
+  if (ss === "draft") return "Vertrag erstellen";
+  if (ss === "contract_generated") return "Vertrag erstellt";
+  return "Verkauf";
 }
 
 function badgeFrom(item: DealerDashboardItem): {
   label: string;
   tone: "pending" | "done";
 } {
-  if ((item as any).stage === "sold")
-    return { label: "Verkauft", tone: "done" };
-  if ((item as any).stage === "ready")
-    return { label: "Übergabe bereit", tone: "done" };
-  if (String((item as any).sale_status) === "draft")
-    return { label: "Entwurf", tone: "pending" };
-  return { label: "Vertrag", tone: "pending" };
-}
+  const stage = String((item as any).stage ?? "");
+  if (stage === "sold") return { label: "Verkauft", tone: "done" };
+  if (stage === "ready") return { label: "Bereit", tone: "pending" };
 
-function subtitleFrom(item: DealerDashboardItem): string {
-  if ((item as any).stage === "draft") return "Entwurf: Kaufvertrag erstellen";
-  if ((item as any).stage === "ready") return "Übergabe: bestätigen";
-  const sp = String((item as any).sale_prep_task?.status ?? "");
-  if (sp && sp !== "done") return "Top Verkäufer: ausfüllen";
-  const ms = String((item as any).mechanic_task?.status ?? "");
-  if (!ms) return "Mechaniker: ausstehend";
-  if (ms === "open" || ms === "blocked" || ms === "overdue")
-    return "Mechaniker: offen";
-  if (ms === "in_progress") return "Mechaniker: in Arbeit";
-  if (ms === "done") {
-    const ds = String((item as any).detail_task?.status ?? "");
-    if (!ds) return "Aufbereiter: ausstehend";
-    if (ds === "open" || ds === "blocked" || ds === "overdue")
-      return "Aufbereiter: offen";
-    if (ds === "in_progress") return "Aufbereiter: in Arbeit";
-    if (ds === "done") return "Aufbereiter: fertig";
+  const saleStatus = String((item as any).sale_status ?? "");
+  if (saleStatus === "draft") return { label: "Vertrag", tone: "pending" };
+
+  const ms = String((item as any)?.mechanic_task?.status ?? "");
+  const ds = String((item as any)?.detail_task?.status ?? "");
+  const hs = String((item as any)?.handover_task?.status ?? "");
+
+  if (hs) {
+    if (hs === "open") return { label: "Übergabe: offen", tone: "pending" };
+    if (hs === "in_progress")
+      return { label: "Übergabe: in Arbeit", tone: "pending" };
+    if (hs === "done") return { label: "Übergabe: fertig", tone: "done" };
   }
-  return "Vertrag";
+
+  if (ds) {
+    if (ds === "open") return { label: "Aufbereiter: offen", tone: "pending" };
+    if (ds === "in_progress")
+      return { label: "Aufbereiter: in Arbeit", tone: "pending" };
+    if (ds === "done") return { label: "Aufbereiter: fertig", tone: "done" };
+  }
+
+  if (ms) {
+    if (ms === "open") return { label: "Mechaniker: offen", tone: "pending" };
+    if (ms === "in_progress")
+      return { label: "Mechaniker: in Arbeit", tone: "pending" };
+    if (ms === "done") return { label: "Mechaniker: fertig", tone: "done" };
+  }
+
+  return { label: "Vertrag", tone: "pending" };
 }
 
 function matches(item: DealerDashboardItem, filter: Filter) {
@@ -89,20 +108,11 @@ function nav(item: DealerDashboardItem) {
     });
     return;
   }
+
   router.push({
     pathname: "/sale/prep/[saleId]",
     params: { saleId: String((item as any).sale_id) },
   });
-}
-
-function uniqBySaleId(items: DealerDashboardItem[]) {
-  const map = new Map<string, DealerDashboardItem>();
-  for (const it of items) {
-    const id = String((it as any).sale_id ?? "");
-    if (!id) continue;
-    if (!map.has(id)) map.set(id, it);
-  }
-  return Array.from(map.values());
 }
 
 export default function DealerDashboardShared({
@@ -112,95 +122,105 @@ export default function DealerDashboardShared({
 }) {
   const { employees: allowed, loading: allowedLoading } =
     useAllowedEmployees(accountId);
-  const dealerEmployees = useMemo(() => {
-    return allowed.filter((e) => String(e.role).toLowerCase() === "dealer");
+
+  const dealerEmployeeIds = useMemo(() => {
+    return allowed
+      .filter((e) => String((e as any).role).toLowerCase() === "dealer")
+      .map((e) => String((e as any).id))
+      .filter(Boolean);
   }, [allowed]);
 
   const [filter, setFilter] = useState<Filter>("open");
-  const [items, setItems] = useState<DealerDashboardItem[]>([]);
-  const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    if (allowedLoading) return;
-    if (dealerEmployees.length === 0) {
-      setItems([]);
-      return;
-    }
+  const q = useDealerDashboardSharedQuery({
+    accountId,
+    dealerEmployeeIds,
+    enabled: !allowedLoading,
+  });
 
-    setLoading(true);
+  // Pull-to-refresh state should not be tied to query.isFetching (prevents "stuck spinner")
+  const mountedRef = useRef(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
     try {
-      const all = await Promise.all(
-        dealerEmployees.map((d) =>
-          fetchDealerDashboardV2({ dealerEmployeeId: d.id }).catch(
-            () => [] as DealerDashboardItem[],
-          ),
-        ),
-      );
-      setItems(uniqBySaleId(all.flat()));
+      await q.refetch();
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setRefreshing(false);
     }
-  }, [allowedLoading, dealerEmployees]);
+  }, [q]);
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
+  const items = (q.data ?? EMPTY_ITEMS) as DealerDashboardItem[];
 
-  const data = useMemo(
-    () => items.filter((x) => matches(x, filter)),
-    [items, filter],
-  );
+  const data = useMemo(() => {
+    return items.filter((x) => matches(x, filter));
+  }, [items, filter]);
 
   return (
     <Screen variant="list">
       <FlatList
         data={data}
-        keyExtractor={(i) => String((i as any).sale_id)}
+        keyExtractor={(i: any) => String((i as any).sale_id)}
         removeClippedSubviews={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={load} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={styles.title}>Händler Dashboard</Text>
             <Text style={styles.sub}>
-              Shared Konto ({dealerEmployees.length} Händler) – Mitarbeiter wird
-              in den Screens/Tasks gewählt
+              Shared Konto ({dealerEmployeeIds.length} Händler) – Mitarbeiter
+              wird in den Screens/Tasks gewählt
             </Text>
             <FilterChips
               options={FILTERS}
               value={filter}
               onChange={setFilter}
             />
+            {q.isFetching ? (
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "700",
+                  color: "rgba(0,0,0,0.45)",
+                }}
+              >
+                Aktualisiere…
+              </Text>
+            ) : null}
           </View>
         }
         ItemSeparatorComponent={() => <View style={{ height: 17 }} />}
         ListEmptyComponent={
-          !loading ? (
+          q.isLoading ? (
+            <View style={{ paddingTop: 14 }}>
+              <ActivityIndicator />
+            </View>
+          ) : (
             <View style={{ paddingTop: 14 }}>
               <Text style={{ color: "rgba(0,0,0,0.55)", fontWeight: "600" }}>
                 Keine Einträge vorhanden.
               </Text>
             </View>
-          ) : (
-            <View style={{ paddingTop: 14 }}>
-              <ActivityIndicator />
-            </View>
           )
         }
-        renderItem={({ item }) => {
+        renderItem={({ item }: { item: DealerDashboardItem }) => {
           const badge = badgeFrom(item);
           return (
             <DashboardCard
               title={titleFrom(item)}
+              subtitle={subtitleFrom(item)}
               badgeLabel={badge.label}
               badgeTone={badge.tone}
-              subtitle={subtitleFrom(item)}
-              meta={`VIN: ${(item as any).vin ?? "-"}`}
               onPress={() => nav(item)}
             />
           );

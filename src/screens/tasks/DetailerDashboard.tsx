@@ -1,23 +1,25 @@
-import React, { useCallback, useMemo, useState, useEffect } from "react";
+// src/screens/tasks/DetailerDashboard.tsx
+import React, { useCallback, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   View,
-  Pressable,
 } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 
 import Screen from "@/src/components/ui/Screen";
 import FilterChips, { type ChipOption } from "@/src/components/ui/FilterChips";
 import DashboardCard from "@/src/components/ui/DashboardCard";
-import { supabase } from "@/src/lib/supabase";
+
 import {
-  fetchDetailerQueue,
+  useDetailerQueueQuery,
   type DetailerQueueItem,
-} from "@/src/features/tasks/detailerQueue.service";
+} from "@/src/features/tasks/v3/tasks.queries";
 
 type Props = {
   adminPicker?: { onPress: () => void };
@@ -65,71 +67,57 @@ function matchesFilter(status: string, filter: Filter) {
   return status === "done";
 }
 
+const EMPTY: DetailerQueueItem[] = [];
+
 export default function DetailerDashboard({ adminPicker }: Props) {
   const [filter, setFilter] = useState<Filter>("open");
-  const [items, setItems] = useState<DetailerQueueItem[]>([]);
-  const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const q = useDetailerQueueQuery();
+
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const onPullRefresh = useCallback(async () => {
+    setPullRefreshing(true);
     try {
-      const res = await fetchDetailerQueue();
-      setItems(res);
-    } catch (e: any) {
-      console.log("fetchDetailerQueue error", e?.message ?? e);
+      await q.refetch();
     } finally {
-      setLoading(false);
+      setPullRefreshing(false);
     }
-  }, []);
+  }, [q]);
 
-  useEffect(() => {
-    const channel = supabase
-      .channel("detailer-tasks")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "tasks" },
-        () => load(),
-      )
-      .subscribe();
+  const items = (q.data ?? EMPTY) as DetailerQueueItem[];
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [load]);
-
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
-
-  const data = useMemo(
-    () => items.filter((x) => matchesFilter(String(x.status), filter)),
-    [filter, items],
-  );
+  const data = useMemo(() => {
+    return items.filter((x) =>
+      matchesFilter(String((x as any).status), filter),
+    );
+  }, [items, filter]);
 
   return (
-    <Screen variant="list">
+    <Screen>
       <FlatList
         data={data}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item: any) => String(item.id)}
         removeClippedSubviews={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={load} />
+          <RefreshControl
+            refreshing={pullRefreshing}
+            onRefresh={onPullRefresh}
+          />
         }
         ListHeaderComponent={
           <View style={styles.header}>
             <View style={styles.titleRow}>
               <Text style={styles.title}>Aufbereiter Dashboard</Text>
+
               {adminPicker ? (
                 <Pressable
                   onPress={adminPicker.onPress}
                   hitSlop={10}
                   style={styles.chevBtn}
                 >
-                  <Feather name="chevron-down" size={26} color="#000" />
+                  <Feather name="chevron-down" size={18} color="#000" />
                 </Pressable>
               ) : null}
             </View>
@@ -139,24 +127,32 @@ export default function DetailerDashboard({ adminPicker }: Props) {
               value={filter}
               onChange={setFilter}
             />
+
+            {q.isFetching ? (
+              <Text style={styles.syncText}>Aktualisiere…</Text>
+            ) : null}
           </View>
         }
-        ItemSeparatorComponent={() => <View style={{ height: 17 }} />}
+        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         ListEmptyComponent={
-          !loading ? (
+          q.isLoading ? (
             <View style={{ paddingTop: 14 }}>
-              <Text style={{ color: "rgba(0,0,0,0.55)", fontWeight: "600" }}>
-                Keine Einträge vorhanden.
-              </Text>
+              <ActivityIndicator />
             </View>
-          ) : null
+          ) : (
+            <View style={{ paddingTop: 14 }}>
+              <Text style={styles.emptyText}>Keine Einträge vorhanden.</Text>
+            </View>
+          )
         }
-        renderItem={({ item }) => {
-          const vehicle = item.vehicle;
-          const title = vehicle?.draft_model?.trim()
-            ? vehicle.draft_model
-            : (vehicle?.vin ?? "Fahrzeug");
-          const vin = vehicle?.vin ?? "-";
+        renderItem={({ item }: { item: any }) => {
+          const vehicle = item.vehicle ?? null;
+          const title =
+            String(vehicle?.draft_model ?? "").trim() ||
+            String(vehicle?.vin ?? "").trim() ||
+            "Fahrzeug";
+
+          const vin = String(vehicle?.vin ?? "-");
           const subtitle = subtitleFromType(String(item.type));
           const label = statusLabel(String(item.status));
           const tone = badgeTone(String(item.status));
@@ -164,11 +160,11 @@ export default function DetailerDashboard({ adminPicker }: Props) {
           return (
             <DashboardCard
               title={title}
-              badgeLabel={label}
-              badgeTone={tone}
               subtitle={subtitle}
               meta={`VIN: ${vin}`}
-              onPress={() => router.push(`/task/detailer/${item.id}`)}
+              badgeLabel={label}
+              badgeTone={tone}
+              onPress={() => router.push(`/task/detailer/${String(item.id)}`)}
             />
           );
         }}
@@ -178,7 +174,7 @@ export default function DetailerDashboard({ adminPicker }: Props) {
 }
 
 const styles = StyleSheet.create({
-  header: { gap: 15, marginBottom: 30 },
+  header: { gap: 12, marginBottom: 22 },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -186,7 +182,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   chevBtn: { width: 40, alignItems: "flex-end", justifyContent: "center" },
-
   title: { fontSize: 22, fontWeight: "700", color: "#000", flex: 1 },
+  syncText: { fontSize: 12, fontWeight: "700", color: "rgba(0,0,0,0.45)" },
   listContent: { paddingHorizontal: 20, paddingBottom: 160 },
+  emptyText: { fontSize: 13, fontWeight: "700", color: "rgba(0,0,0,0.55)" },
 });

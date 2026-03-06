@@ -174,6 +174,7 @@ const styles = StyleSheet.create({
 
   shadowWrap: {
     width: "100%",
+    maxWidth: 500,
     borderRadius: UI.radius,
     backgroundColor: Platform.OS === "android" ? "#fff" : "transparent",
     shadowColor: UI.shadow.color,

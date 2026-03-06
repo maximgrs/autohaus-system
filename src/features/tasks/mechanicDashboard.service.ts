@@ -1,4 +1,6 @@
+// src/features/tasks/mechanicDashboard.service.ts
 import { supabase } from "@/src/lib/supabase";
+import { getActiveEmployeeContext } from "@/src/features/session/employeeContext";
 
 export type TaskStatus =
     | "open"
@@ -8,26 +10,30 @@ export type TaskStatus =
     | "overdue"
     | string;
 
-export type VehicleMini = {
-    id: string;
-    vin: string | null;
-    carx_data: any;
-    draft_model: string | null;
-};
-
 export type MechanicTaskListItem = {
     id: string;
     vehicle_id: string;
-    type: string;
+    type: string; // aliased from task_type
     status: TaskStatus;
     title: string | null;
     assigned_employee_id: string | null;
     created_at: string;
     updated_at: string;
-    vehicle: VehicleMini | null;
+
+    taken_by_employee_id?: string | null;
+    taken_at?: string | null;
+
+    vehicle: {
+        id: string;
+        vin: string | null;
+        carx_data: any;
+        draft_model: string | null;
+    } | null;
 };
 
 export type MechanicFilter = "all" | "open" | "in_progress" | "done";
+
+const MECHANIC_TYPES = ["mechanic_prep"] as const;
 
 function statusFilter(filter: MechanicFilter): string[] | null {
     if (filter === "all") return null;
@@ -36,56 +42,66 @@ function statusFilter(filter: MechanicFilter): string[] | null {
     return ["done"];
 }
 
-// Raw from supabase: many-to-one embed comes as object
-type RawRow = Omit<MechanicTaskListItem, "vehicle"> & {
-    vehicle: VehicleMini | null;
-};
+function isSharedAccount(ctx: { accountType: string }) {
+    return String(ctx.accountType ?? "").toLowerCase() === "shared";
+}
+
+function looksLikeMissingColumnError(errMsg: string, column: string) {
+    const m = errMsg.toLowerCase();
+    return m.includes(column.toLowerCase()) &&
+        (m.includes("column") || m.includes("does not exist"));
+}
 
 export async function fetchMechanicPrepTasks(args: {
     filter: MechanicFilter;
 }): Promise<MechanicTaskListItem[]> {
-    const list = statusFilter(args.filter);
+    const ctx = await getActiveEmployeeContext();
+    const shared = isSharedAccount(ctx);
+    const myId = String(ctx.employeeId ?? "").trim() || null;
 
-    let q = supabase
+    const statuses = statusFilter(args.filter);
+
+    const baseOrFilter = !shared && myId
+        // Personal account:
+        // - show all open/blocked/overdue
+        // - show only mine for in_progress/done
+        ? `status.in.(open,blocked,overdue),and(status.in.(in_progress,done),taken_by_employee_id.eq.${myId})`
+        : null;
+
+    // Preferred: task_type exists, alias to `type`
+    let preferred = supabase
         .from("tasks")
         .select(
-            `
-        id,
-        vehicle_id,
-        type,
-        status,
-        title,
-        assigned_employee_id,
-        created_at,
-        updated_at,
-        vehicle:vehicles (
-          id,
-          vin,
-          carx_data,
-          draft_model
+            "id,vehicle_id,type:task_type,status,title,assigned_employee_id,created_at,updated_at,taken_by_employee_id,taken_at,vehicle:vehicles(id,vin,carx_data,draft_model)",
         )
-      `,
-        )
-        .eq("type", "mechanic_prep")
-        .eq("assigned_role", "mechanic")
+        .in("task_type", MECHANIC_TYPES as any)
         .order("created_at", { ascending: false });
 
-    if (list) q = q.in("status", list);
+    if (statuses) preferred = preferred.in("status", statuses);
 
-    const { data, error } = await q;
-    if (error) throw error;
+    preferred = baseOrFilter ? preferred.or(baseOrFilter) : preferred;
 
-    const rows = (data ?? []) as unknown as RawRow[];
+    const { data: data1, error: err1 } = await preferred;
+    if (!err1) return (data1 ?? []) as any;
 
-    return rows.map((r) => ({
-        id: String(r.id),
-        vehicle_id: String(r.vehicle_id),
-        type: String(r.type),
-        status: r.status,
-        title: r.title ?? null,
-        assigned_employee_id: r.assigned_employee_id ?? null,
-        created_at: String(r.created_at),
-        updated_at: String(r.updated_at),
-        vehicle: r.vehicle ?? null, // <-- FIX (kein [0])
-    }));
+    // Fallback schema: `type` column exists
+    if (!looksLikeMissingColumnError(err1.message ?? "", "task_type")) {
+        throw err1;
+    }
+
+    let legacy = supabase
+        .from("tasks")
+        .select(
+            "id,vehicle_id,type,status,title,assigned_employee_id,created_at,updated_at,taken_by_employee_id,taken_at,vehicle:vehicles(id,vin,carx_data,draft_model)",
+        )
+        .in("type", MECHANIC_TYPES as any)
+        .order("created_at", { ascending: false });
+
+    if (statuses) legacy = legacy.in("status", statuses);
+    legacy = baseOrFilter ? legacy.or(baseOrFilter) : legacy;
+
+    const { data: data2, error: err2 } = await legacy;
+    if (err2) throw err2;
+
+    return (data2 ?? []) as any;
 }

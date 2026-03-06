@@ -8,17 +8,17 @@ import {
   Text,
   View,
 } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
 
 import Screen from "@/src/components/ui/Screen";
 import FilterChips, { type ChipOption } from "@/src/components/ui/FilterChips";
 import DashboardCard from "@/src/components/ui/DashboardCard";
 
 import {
-  fetchMechanicPrepTasks,
+  useMechanicPrepTasksQuery,
   type MechanicFilter,
   type MechanicTaskListItem,
-} from "@/src/features/tasks/mechanicDashboard.service";
+} from "@/src/features/tasks/v3/tasks.queries";
 
 const FILTERS: ChipOption<MechanicFilter>[] = [
   { key: "all", label: "alle" },
@@ -44,41 +44,40 @@ function badgeTone(status: string): "pending" | "done" {
   return status === "done" ? "done" : "pending";
 }
 
+const EMPTY: MechanicTaskListItem[] = [];
+
 export default function MechanicDashboardShared() {
   const [filter, setFilter] = useState<MechanicFilter>("open");
-  const [items, setItems] = useState<MechanicTaskListItem[]>([]);
-  const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const q = useMechanicPrepTasksQuery(filter);
+
+  // Pull-to-refresh should only show spinner when user triggers it
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const onPullRefresh = useCallback(async () => {
+    setPullRefreshing(true);
     try {
-      const res = await fetchMechanicPrepTasks({ filter });
-      setItems(res);
-    } catch (e: any) {
-      console.log("fetchMechanicPrepTasks error", e?.message ?? e);
+      await q.refetch();
     } finally {
-      setLoading(false);
+      setPullRefreshing(false);
     }
-  }, [filter]);
+  }, [q]);
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
-
+  const items = (q.data ?? EMPTY) as MechanicTaskListItem[];
   const data = useMemo(() => items, [items]);
 
   return (
-    <Screen variant="list">
+    <Screen>
       <FlatList
         data={data}
-        keyExtractor={(i) => i.id}
+        keyExtractor={(i) => String(i.id)}
         removeClippedSubviews={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={load} />
+          <RefreshControl
+            refreshing={pullRefreshing}
+            onRefresh={onPullRefresh}
+          />
         }
         ListHeaderComponent={
           <View style={styles.header}>
@@ -86,24 +85,27 @@ export default function MechanicDashboardShared() {
             <Text style={styles.sub}>
               Shared Konto (Mitarbeiter wird pro Aufgabe gewählt)
             </Text>
+
             <FilterChips
               options={FILTERS}
               value={filter}
               onChange={setFilter}
             />
+
+            {q.isFetching ? (
+              <Text style={styles.syncText}>Aktualisiere…</Text>
+            ) : null}
           </View>
         }
-        ItemSeparatorComponent={() => <View style={{ height: 17 }} />}
+        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         ListEmptyComponent={
-          !loading ? (
+          q.isLoading ? (
             <View style={{ paddingTop: 14 }}>
-              <Text style={{ color: "rgba(0,0,0,0.55)", fontWeight: "600" }}>
-                Keine Aufgaben vorhanden.
-              </Text>
+              <ActivityIndicator />
             </View>
           ) : (
             <View style={{ paddingTop: 14 }}>
-              <ActivityIndicator />
+              <Text style={styles.emptyText}>Keine Aufgaben vorhanden.</Text>
             </View>
           )
         }
@@ -118,14 +120,14 @@ export default function MechanicDashboardShared() {
           return (
             <DashboardCard
               title={vehicleTitle}
-              badgeLabel={badgeLabel(String(item.status))}
-              badgeTone={badgeTone(String(item.status))}
               subtitle={item.title ?? "Mechaniker Vorbereitung"}
               meta={`VIN: ${vin}`}
+              badgeLabel={badgeLabel(String(item.status))}
+              badgeTone={badgeTone(String(item.status))}
               onPress={() =>
                 router.push({
                   pathname: "/task/mechanic/[id]",
-                  params: { id: item.id },
+                  params: { id: String(item.id) },
                 })
               }
             />
@@ -140,5 +142,7 @@ const styles = StyleSheet.create({
   header: { gap: 10, marginBottom: 18 },
   title: { fontSize: 22, fontWeight: "800", color: "#000" },
   sub: { fontSize: 12, fontWeight: "700", color: "rgba(0,0,0,0.55)" },
+  syncText: { fontSize: 12, fontWeight: "700", color: "rgba(0,0,0,0.45)" },
   listContent: { paddingHorizontal: 20, paddingBottom: 160 },
+  emptyText: { fontSize: 13, fontWeight: "700", color: "rgba(0,0,0,0.55)" },
 });

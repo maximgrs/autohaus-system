@@ -1,25 +1,28 @@
+// src/screens/tasks/MechanicDashboard.tsx
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   View,
-  Pressable,
 } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 
 import Screen from "@/src/components/ui/Screen";
 import FilterChips, { type ChipOption } from "@/src/components/ui/FilterChips";
 import DashboardCard from "@/src/components/ui/DashboardCard";
-import { useDevEmployee } from "@/src/features/session/devSession";
+
+import { useEmployeeSelection } from "@/src/features/employees/useEmployeeSelection";
+
 import {
-  fetchMechanicPrepTasks,
+  useMechanicPrepTasksQuery,
   type MechanicFilter,
   type MechanicTaskListItem,
-} from "@/src/features/tasks/mechanicDashboard.service";
+} from "@/src/features/tasks/v3/tasks.queries";
 
 type Props = {
   adminPicker?: { onPress: () => void };
@@ -49,43 +52,41 @@ function badgeTone(status: string): "pending" | "done" {
   return status === "done" ? "done" : "pending";
 }
 
+const EMPTY: MechanicTaskListItem[] = [];
+
 export default function MechanicDashboard({ adminPicker }: Props) {
-  const { employee } = useDevEmployee();
-
+  const { employee } = useEmployeeSelection();
   const [filter, setFilter] = useState<MechanicFilter>("open");
-  const [items, setItems] = useState<MechanicTaskListItem[]>([]);
-  const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const q = useMechanicPrepTasksQuery(filter);
+
+  // Pull-to-refresh should only show spinner when user triggers it
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const onPullRefresh = useCallback(async () => {
+    setPullRefreshing(true);
     try {
-      const res = await fetchMechanicPrepTasks({ filter });
-      setItems(res);
-    } catch (e: any) {
-      console.log("fetchMechanicPrepTasks error", e?.message ?? e);
+      await q.refetch();
     } finally {
-      setLoading(false);
+      setPullRefreshing(false);
     }
-  }, [filter]);
+  }, [q]);
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
-
+  const items = (q.data ?? EMPTY) as MechanicTaskListItem[];
   const data = useMemo(() => items, [items]);
 
   return (
-    <Screen variant="list">
+    <Screen>
       <FlatList
         data={data}
-        keyExtractor={(i) => i.id}
+        keyExtractor={(i) => String(i.id)}
         removeClippedSubviews={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={load} />
+          <RefreshControl
+            refreshing={pullRefreshing}
+            onRefresh={onPullRefresh}
+          />
         }
         ListHeaderComponent={
           <View style={styles.header}>
@@ -98,7 +99,7 @@ export default function MechanicDashboard({ adminPicker }: Props) {
                   hitSlop={10}
                   style={styles.chevBtn}
                 >
-                  <Feather name="chevron-down" size={26} color="#000" />
+                  <Feather name="chevron-down" size={18} color="#000" />
                 </Pressable>
               ) : null}
             </View>
@@ -112,19 +113,21 @@ export default function MechanicDashboard({ adminPicker }: Props) {
               value={filter}
               onChange={setFilter}
             />
+
+            {q.isFetching ? (
+              <Text style={styles.syncText}>Aktualisiere…</Text>
+            ) : null}
           </View>
         }
-        ItemSeparatorComponent={() => <View style={{ height: 17 }} />}
+        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         ListEmptyComponent={
-          !loading ? (
+          q.isLoading ? (
             <View style={{ paddingTop: 14 }}>
-              <Text style={{ color: "rgba(0,0,0,0.55)", fontWeight: "600" }}>
-                Keine Aufgaben vorhanden.
-              </Text>
+              <ActivityIndicator />
             </View>
           ) : (
             <View style={{ paddingTop: 14 }}>
-              <ActivityIndicator />
+              <Text style={styles.emptyText}>Keine Aufgaben vorhanden.</Text>
             </View>
           )
         }
@@ -139,14 +142,14 @@ export default function MechanicDashboard({ adminPicker }: Props) {
           return (
             <DashboardCard
               title={vehicleTitle}
-              badgeLabel={badgeLabel(String(item.status))}
-              badgeTone={badgeTone(String(item.status))}
               subtitle={item.title ?? "Mechaniker Vorbereitung"}
               meta={`VIN: ${vin}`}
+              badgeLabel={badgeLabel(String(item.status))}
+              badgeTone={badgeTone(String(item.status))}
               onPress={() =>
                 router.push({
                   pathname: "/task/mechanic/[id]",
-                  params: { id: item.id },
+                  params: { id: String(item.id) },
                 })
               }
             />
@@ -158,7 +161,7 @@ export default function MechanicDashboard({ adminPicker }: Props) {
 }
 
 const styles = StyleSheet.create({
-  header: { gap: 15, marginBottom: 30 },
+  header: { gap: 12, marginBottom: 22 },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -166,9 +169,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   chevBtn: { width: 40, alignItems: "flex-end", justifyContent: "center" },
-
   title: { fontSize: 22, fontWeight: "700", color: "#000", flex: 1 },
   sub: { fontSize: 13, fontWeight: "600", color: "rgba(0,0,0,0.55)" },
-
+  syncText: { fontSize: 12, fontWeight: "700", color: "rgba(0,0,0,0.45)" },
   listContent: { paddingHorizontal: 20, paddingBottom: 160 },
+  emptyText: { fontSize: 13, fontWeight: "700", color: "rgba(0,0,0,0.55)" },
 });

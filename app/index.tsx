@@ -18,7 +18,7 @@ export default function Entry() {
     );
   }
 
-  return <Redirect href={"./tabs/home"} />;
+  return <Redirect href={href} />;
 }
 
 const styles = StyleSheet.create({
