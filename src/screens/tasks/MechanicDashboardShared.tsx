@@ -14,6 +14,8 @@ import Screen from "@/src/components/ui/Screen";
 import FilterChips, { type ChipOption } from "@/src/components/ui/FilterChips";
 import DashboardCard from "@/src/components/ui/DashboardCard";
 
+import { useRealtimeRefetchOnTables } from "@/src/services/realtime/useRealtimeRefetchOnTables";
+
 import {
   useMechanicPrepTasksQuery,
   type MechanicFilter,
@@ -51,6 +53,12 @@ export default function MechanicDashboardShared() {
 
   const q = useMechanicPrepTasksQuery(filter);
 
+  useRealtimeRefetchOnTables({
+    tables: ["tasks", "vehicles"],
+    debounceMs: 350,
+    onChange: () => q.refetch(),
+  });
+
   // Pull-to-refresh should only show spinner when user triggers it
   const [pullRefreshing, setPullRefreshing] = useState(false);
   const onPullRefresh = useCallback(async () => {
@@ -69,7 +77,7 @@ export default function MechanicDashboardShared() {
     <Screen>
       <FlatList
         data={data}
-        keyExtractor={(i) => String(i.id)}
+        keyExtractor={(i: any) => String(i.id)}
         removeClippedSubviews={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
@@ -120,8 +128,7 @@ export default function MechanicDashboardShared() {
           return (
             <DashboardCard
               title={vehicleTitle}
-              subtitle={item.title ?? "Mechaniker Vorbereitung"}
-              meta={`VIN: ${vin}`}
+              subtitle={`VIN: ${vin}`}
               badgeLabel={badgeLabel(String(item.status))}
               badgeTone={badgeTone(String(item.status))}
               onPress={() =>

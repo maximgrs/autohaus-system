@@ -1,4 +1,3 @@
-// src/screens/tasks/DealerDashboardShared.tsx
 import React, {
   useCallback,
   useEffect,
@@ -14,11 +13,13 @@ import {
   Text,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 
 import Screen from "@/src/components/ui/Screen";
 import FilterChips, { type ChipOption } from "@/src/components/ui/FilterChips";
 import DashboardCard from "@/src/components/ui/DashboardCard";
+
+import { useRealtimeRefetchOnTables } from "@/src/services/realtime/useRealtimeRefetchOnTables";
 
 import { useAllowedEmployees } from "@/src/features/employees/useAllowedEmployees";
 import { useDealerDashboardSharedQuery } from "@/src/features/sales/hooks/useDealerDashboardSharedQuery";
@@ -32,9 +33,6 @@ const FILTERS: ChipOption<Filter>[] = [
   { key: "ready", label: "bereit" },
   { key: "sold", label: "verkauft" },
 ];
-
-// Stable empty array -> fixes `items ?? []` dependency warning
-const EMPTY_ITEMS: DealerDashboardItem[] = [];
 
 function titleFrom(item: DealerDashboardItem) {
   const carx = (item as any).carx_data ?? null;
@@ -65,6 +63,7 @@ function badgeFrom(item: DealerDashboardItem): {
   const saleStatus = String((item as any).sale_status ?? "");
   if (saleStatus === "draft") return { label: "Vertrag", tone: "pending" };
 
+  // prep states (mechanic/detailer/handover)
   const ms = String((item as any)?.mechanic_task?.status ?? "");
   const ds = String((item as any)?.detail_task?.status ?? "");
   const hs = String((item as any)?.handover_task?.status ?? "");
@@ -138,7 +137,25 @@ export default function DealerDashboardShared({
     enabled: !allowedLoading,
   });
 
-  // Pull-to-refresh state should not be tied to query.isFetching (prevents "stuck spinner")
+  // Realtime-driven refetch while this screen is focused
+  useRealtimeRefetchOnTables({
+    tables: [
+      "vehicle_sales",
+      "vehicle_sale_prep",
+      "vehicle_handover_task",
+      "vehicles",
+      "tasks",
+    ],
+    debounceMs: 500,
+    onChange: () => q.refetch(),
+  });
+
+  useFocusEffect(
+    useCallback(() => {
+      q.refetch();
+    }, [q]),
+  );
+
   const mountedRef = useRef(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -157,11 +174,10 @@ export default function DealerDashboardShared({
     }
   }, [q]);
 
-  const items = (q.data ?? EMPTY_ITEMS) as DealerDashboardItem[];
-
   const data = useMemo(() => {
+    const items = q.data ?? [];
     return items.filter((x) => matches(x, filter));
-  }, [items, filter]);
+  }, [q.data, filter]);
 
   return (
     <Screen variant="list">
@@ -186,17 +202,6 @@ export default function DealerDashboardShared({
               value={filter}
               onChange={setFilter}
             />
-            {q.isFetching ? (
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color: "rgba(0,0,0,0.45)",
-                }}
-              >
-                Aktualisiere…
-              </Text>
-            ) : null}
           </View>
         }
         ItemSeparatorComponent={() => <View style={{ height: 17 }} />}

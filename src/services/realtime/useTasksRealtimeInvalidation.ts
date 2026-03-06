@@ -11,6 +11,14 @@ import {
 
 import { dealerDashboardQueryKeyPrefix } from "@/src/features/sales/hooks/useDealerDashboardQuery";
 
+/**
+ * Global “mark stale” for dashboard queries when relevant tables change.
+ *
+ * Important: We intentionally set refetchType: "none" here.
+ * Dashboards that need live updates should explicitly refetch (screen-focused)
+ * using useRealtimeRefetchOnTables(), otherwise some screens can feel “chatty”
+ * and refetch on unrelated changes.
+ */
 export function useTasksRealtimeInvalidation() {
     const queryClient = useQueryClient();
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -28,14 +36,17 @@ export function useTasksRealtimeInvalidation() {
                 // Task dashboards
                 queryClient.invalidateQueries({
                     queryKey: detailerQueueQueryKey,
+                    refetchType: "none",
                 });
                 queryClient.invalidateQueries({
                     queryKey: mechanicQueueQueryKeyBase,
+                    refetchType: "none",
                 });
 
                 // Dealer dashboards (admin + dealer scoped + shared)
                 queryClient.invalidateQueries({
                     queryKey: dealerDashboardQueryKeyPrefix,
+                    refetchType: "none",
                 });
             }, 400);
         });

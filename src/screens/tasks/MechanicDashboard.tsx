@@ -16,8 +16,9 @@ import Screen from "@/src/components/ui/Screen";
 import FilterChips, { type ChipOption } from "@/src/components/ui/FilterChips";
 import DashboardCard from "@/src/components/ui/DashboardCard";
 
-import { useEmployeeSelection } from "@/src/features/employees/useEmployeeSelection";
+import { useRealtimeRefetchOnTables } from "@/src/services/realtime/useRealtimeRefetchOnTables";
 
+import { useEmployeeSelection } from "@/src/features/employees/useEmployeeSelection";
 import {
   useMechanicPrepTasksQuery,
   type MechanicFilter,
@@ -56,9 +57,16 @@ const EMPTY: MechanicTaskListItem[] = [];
 
 export default function MechanicDashboard({ adminPicker }: Props) {
   const { employee } = useEmployeeSelection();
+
   const [filter, setFilter] = useState<MechanicFilter>("open");
 
   const q = useMechanicPrepTasksQuery(filter);
+
+  useRealtimeRefetchOnTables({
+    tables: ["tasks", "vehicles"],
+    debounceMs: 350,
+    onChange: () => q.refetch(),
+  });
 
   // Pull-to-refresh should only show spinner when user triggers it
   const [pullRefreshing, setPullRefreshing] = useState(false);
@@ -78,7 +86,7 @@ export default function MechanicDashboard({ adminPicker }: Props) {
     <Screen>
       <FlatList
         data={data}
-        keyExtractor={(i) => String(i.id)}
+        keyExtractor={(i: any) => String(i.id)}
         removeClippedSubviews={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
@@ -142,8 +150,7 @@ export default function MechanicDashboard({ adminPicker }: Props) {
           return (
             <DashboardCard
               title={vehicleTitle}
-              subtitle={item.title ?? "Mechaniker Vorbereitung"}
-              meta={`VIN: ${vin}`}
+              subtitle={`VIN: ${vin}`}
               badgeLabel={badgeLabel(String(item.status))}
               badgeTone={badgeTone(String(item.status))}
               onPress={() =>

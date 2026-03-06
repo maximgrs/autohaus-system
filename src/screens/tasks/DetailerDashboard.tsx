@@ -16,6 +16,8 @@ import Screen from "@/src/components/ui/Screen";
 import FilterChips, { type ChipOption } from "@/src/components/ui/FilterChips";
 import DashboardCard from "@/src/components/ui/DashboardCard";
 
+import { useRealtimeRefetchOnTables } from "@/src/services/realtime/useRealtimeRefetchOnTables";
+
 import {
   useDetailerQueueQuery,
   type DetailerQueueItem,
@@ -74,6 +76,12 @@ export default function DetailerDashboard({ adminPicker }: Props) {
 
   const q = useDetailerQueueQuery();
 
+  useRealtimeRefetchOnTables({
+    tables: ["tasks", "vehicles"],
+    debounceMs: 350,
+    onChange: () => q.refetch(),
+  });
+
   const [pullRefreshing, setPullRefreshing] = useState(false);
   const onPullRefresh = useCallback(async () => {
     setPullRefreshing(true);
@@ -84,13 +92,12 @@ export default function DetailerDashboard({ adminPicker }: Props) {
     }
   }, [q]);
 
-  const items = (q.data ?? EMPTY) as DetailerQueueItem[];
-
   const data = useMemo(() => {
+    const items = (q.data ?? EMPTY) as DetailerQueueItem[];
     return items.filter((x) =>
       matchesFilter(String((x as any).status), filter),
     );
-  }, [items, filter]);
+  }, [q.data, filter]);
 
   return (
     <Screen>
