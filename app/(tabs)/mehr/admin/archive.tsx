@@ -1,27 +1,43 @@
 import React from "react";
 import { Stack } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
-import Screen from "@/src/components/ui/Screen";
+
+import { AdminOnlyScreen } from "@/src/features/admin";
 
 export default function AdminArchiveScreen() {
   return (
-    <Screen variant="scroll" bottomSpace={140}>
+    <>
       <Stack.Screen options={{ title: "Archiv" }} />
-      <View style={styles.wrap}>
-        <Text style={styles.title}>Archiv</Text>
-        <Text style={styles.muted}>
-          Nächster Schritt: Verkäufe (sales) + vehicles.status=archived
-          anzeigen, Filter/Export.
-        </Text>
-      </View>
-    </Screen>
+
+      <AdminOnlyScreen
+        title="Archiv"
+        subtitle="Platzhalter für archivierte Verkäufe und Fahrzeuge."
+      >
+        <View style={styles.card}>
+          <Text style={styles.head}>Archiv</Text>
+          <Text style={styles.text}>
+            Nächster Schritt: Verkäufe aus `sales` und archivierte Fahrzeuge aus
+            `vehicles.status=archived` anzeigen, filtern und exportieren.
+          </Text>
+        </View>
+      </AdminOnlyScreen>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: 20, paddingTop: 16, gap: 10 },
-  title: { fontSize: 18, fontWeight: "900", color: "#000" },
-  muted: {
+  card: {
+    borderRadius: 16,
+    padding: 14,
+    backgroundColor: "rgba(0,0,0,0.04)",
+    gap: 8,
+  },
+  head: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#000",
+  },
+  text: {
     fontSize: 13,
     fontWeight: "700",
     color: "rgba(0,0,0,0.55)",

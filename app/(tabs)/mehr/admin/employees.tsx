@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -6,22 +6,20 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { Stack } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 
-import Screen from "@/src/components/ui/Screen";
-import AppButton from "@/src/components/ui/AppButton";
-import TextField from "@/src/components/ui/TextField";
-
 import {
+  AdminOnlyScreen,
   adminCreateEmployee,
   adminSetEmployeeActive,
   fetchEmployees,
-  type EmployeeRow,
   type EmployeeRole,
-} from "@/src/features/admin/employeesAdmin.service";
+  type EmployeeRow,
+} from "@/src/features/admin";
 
 const ROLES: EmployeeRole[] = [
   "dealer",
@@ -31,22 +29,20 @@ const ROLES: EmployeeRole[] = [
   "admin",
 ];
 
-function fmtRole(r: string) {
-  const x = String(r).toLowerCase();
-  if (x === "dealer") return "Händler";
-  if (x === "mechanic") return "Mechaniker";
-  if (x === "detailer") return "Aufbereiter";
-  if (x === "listing") return "Inserat";
-  if (x === "admin") return "Admin";
-  return x;
+function fmtRole(role: string) {
+  const value = String(role).toLowerCase();
+  if (value === "dealer") return "Händler";
+  if (value === "mechanic") return "Mechaniker";
+  if (value === "detailer") return "Aufbereiter";
+  if (value === "listing") return "Inserat";
+  if (value === "admin") return "Admin";
+  return value;
 }
 
 export default function AdminEmployeesScreen() {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<EmployeeRow[]>([]);
-  const [q, setQ] = useState("");
-
-  // Create form
+  const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [role, setRole] = useState<EmployeeRole>("dealer");
@@ -63,26 +59,32 @@ export default function AdminEmployeesScreen() {
     }
   }, []);
 
-  React.useEffect(() => {
-    load();
+  useEffect(() => {
+    void load();
   }, [load]);
 
   const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return rows;
-    return rows.filter((r) => String(r.display_name).toLowerCase().includes(s));
-  }, [q, rows]);
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+
+    return rows.filter((row) =>
+      String(row.display_name ?? "")
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [rows, search]);
 
   const onCreate = useCallback(async () => {
-    const n = name.trim();
-    if (!n) {
+    const displayName = name.trim();
+
+    if (!displayName) {
       Alert.alert("Fehlt", "Bitte Name eingeben.");
       return;
     }
 
     setCreating(true);
     try {
-      await adminCreateEmployee({ displayName: n, role });
+      await adminCreateEmployee({ displayName, role });
       setName("");
       setRole("dealer");
       await load();
@@ -113,67 +115,96 @@ export default function AdminEmployeesScreen() {
   );
 
   return (
-    <Screen variant="scroll" bottomSpace={180}>
+    <>
       <Stack.Screen options={{ title: "Mitarbeiter" }} />
 
-      <View style={styles.wrap}>
-        <Text style={styles.title}>Mitarbeiter</Text>
-        <Text style={styles.sub}>Anlegen, aktivieren/deaktivieren.</Text>
-
+      <AdminOnlyScreen
+        title="Mitarbeiter"
+        subtitle="Mitarbeiter anlegen sowie aktivieren und deaktivieren."
+      >
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Neuer Mitarbeiter</Text>
 
-          <TextField
-            label="Name"
-            value={name}
-            onChangeText={setName}
-            placeholder="z.B. Max Mustermann"
-          />
-
-          <Text style={styles.label}>Rolle</Text>
-          <View style={styles.roleRow}>
-            {ROLES.map((r) => (
-              <Pressable
-                key={r}
-                onPress={() => setRole(r)}
-                style={[styles.chip, role === r && styles.chipActive]}
-              >
-                <Text
-                  style={[styles.chipText, role === r && styles.chipTextActive]}
-                >
-                  {fmtRole(r)}
-                </Text>
-              </Pressable>
-            ))}
+          <View style={styles.field}>
+            <Text style={styles.label}>Name</Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Max Mustermann"
+              placeholderTextColor="rgba(0,0,0,0.35)"
+              style={styles.input}
+            />
           </View>
 
-          <AppButton
-            title={creating ? "Erstelle…" : "Mitarbeiter erstellen"}
-            onPress={onCreate}
+          <View style={styles.field}>
+            <Text style={styles.label}>Rolle</Text>
+            <View style={styles.roleRow}>
+              {ROLES.map((r) => {
+                const active = role === r;
+                return (
+                  <Pressable
+                    key={r}
+                    onPress={() => setRole(r)}
+                    style={[styles.chip, active ? styles.chipActive : null]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        active ? styles.chipTextActive : null,
+                      ]}
+                    >
+                      {fmtRole(r)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <Pressable
+            onPress={() => {
+              void onCreate();
+            }}
             disabled={creating}
-          />
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              creating ? { opacity: 0.7 } : null,
+              pressed ? { opacity: 0.9 } : null,
+            ]}
+          >
+            {creating ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.primaryBtnText}>Mitarbeiter erstellen</Text>
+            )}
+          </Pressable>
         </View>
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Liste</Text>
 
-          <TextField
-            label="Suche"
-            value={q}
-            onChangeText={setQ}
-            placeholder="Name…"
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Nach Name suchen"
+            placeholderTextColor="rgba(0,0,0,0.35)"
+            style={styles.input}
           />
 
           {loading ? (
-            <View style={{ paddingTop: 14 }}>
+            <View style={styles.loadingBox}>
               <ActivityIndicator />
             </View>
           ) : (
             <FlatList
               data={filtered}
-              keyExtractor={(x) => x.id}
+              keyExtractor={(item) => item.id}
               scrollEnabled={false}
-              contentContainerStyle={{ paddingTop: 12, gap: 10 }}
+              contentContainerStyle={styles.listContent}
+              ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+              ListEmptyComponent={
+                <Text style={styles.empty}>Keine Mitarbeiter gefunden.</Text>
+              }
               renderItem={({ item }) => (
                 <View style={styles.row}>
                   <View style={{ flex: 1 }}>
@@ -185,16 +216,18 @@ export default function AdminEmployeesScreen() {
                   </View>
 
                   <Pressable
-                    onPress={() => toggleActive(item)}
+                    onPress={() => {
+                      void toggleActive(item);
+                    }}
                     style={({ pressed }) => [
                       styles.actionBtn,
-                      pressed ? { opacity: 0.85 } : null,
                       item.active ? styles.deactivate : styles.activate,
+                      pressed ? { opacity: 0.85 } : null,
                     ]}
                   >
                     <Feather
                       name={item.active ? "slash" : "check"}
-                      size={16}
+                      size={14}
                       color="#145437"
                     />
                     <Text style={styles.actionText}>
@@ -203,14 +236,13 @@ export default function AdminEmployeesScreen() {
                   </Pressable>
                 </View>
               )}
-              ListEmptyComponent={
-                <Text style={styles.empty}>Keine Mitarbeiter gefunden.</Text>
-              }
             />
           )}
 
           <Pressable
-            onPress={load}
+            onPress={() => {
+              void load();
+            }}
             style={({ pressed }) => [
               styles.reloadBtn,
               pressed ? { opacity: 0.85 } : null,
@@ -219,32 +251,47 @@ export default function AdminEmployeesScreen() {
             <Text style={styles.reloadText}>Neu laden</Text>
           </Pressable>
         </View>
-      </View>
-    </Screen>
+      </AdminOnlyScreen>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingTop: 16, gap: 14 },
-  title: { fontSize: 20, fontWeight: "900", color: "#000" },
-  sub: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "rgba(0,0,0,0.55)",
-    lineHeight: 18,
-  },
-
   card: {
     borderRadius: 16,
     backgroundColor: "rgba(0,0,0,0.04)",
     padding: 14,
-    gap: 10,
+    gap: 12,
   },
-  cardTitle: { fontSize: 13, fontWeight: "900", color: "#000" },
-
-  label: { fontSize: 12, fontWeight: "900", color: "rgba(0,0,0,0.65)" },
-  roleRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-
+  cardTitle: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#000",
+  },
+  field: {
+    gap: 8,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "rgba(0,0,0,0.65)",
+  },
+  input: {
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+    paddingHorizontal: 12,
+    color: "#000",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  roleRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -252,11 +299,36 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.06)",
   },
   chipActive: {
-    backgroundColor: "rgba(21, 127, 79, 0.12)",
+    backgroundColor: "rgba(21,127,79,0.12)",
   },
-  chipText: { fontSize: 12, fontWeight: "900", color: "rgba(0,0,0,0.65)" },
-  chipTextActive: { color: "#145437" },
-
+  chipText: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "rgba(0,0,0,0.65)",
+  },
+  chipTextActive: {
+    color: "#145437",
+  },
+  primaryBtn: {
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: "#145437",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryBtnText: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#fff",
+  },
+  loadingBox: {
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  listContent: {
+    paddingTop: 4,
+  },
   row: {
     borderRadius: 14,
     backgroundColor: "rgba(255,255,255,0.85)",
@@ -268,14 +340,17 @@ const styles = StyleSheet.create({
     gap: 12,
     alignItems: "center",
   },
-  rowName: { fontSize: 13, fontWeight: "900", color: "#000" },
+  rowName: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#000",
+  },
   rowMeta: {
     fontSize: 12,
     fontWeight: "800",
     color: "rgba(0,0,0,0.55)",
     marginTop: 2,
   },
-
   actionBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -289,8 +364,11 @@ const styles = StyleSheet.create({
   },
   deactivate: {},
   activate: {},
-  actionText: { fontSize: 12, fontWeight: "900", color: "#145437" },
-
+  actionText: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#145437",
+  },
   reloadBtn: {
     alignSelf: "flex-start",
     paddingHorizontal: 12,
@@ -298,8 +376,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "rgba(0,0,0,0.06)",
   },
-  reloadText: { fontSize: 12, fontWeight: "900", color: "#000" },
-
+  reloadText: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#000",
+  },
   empty: {
     paddingTop: 10,
     fontSize: 12,

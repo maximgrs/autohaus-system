@@ -1,15 +1,33 @@
 import React from "react";
-import { Tabs, Redirect } from "expo-router";
+import { ActivityIndicator, View } from "react-native";
+import { Redirect, Tabs } from "expo-router";
+import { Feather } from "@expo/vector-icons";
 
-import { FloatingTabBar } from "@/src/components/navigation/FloatingTabBar";
-import { useAppEntryRoute } from "@/src/features/session/useAppEntryRoute";
+import { useAppEntryRoute } from "@/src/features/session";
 
 export default function TabsLayout() {
   const { loading, href } = useAppEntryRoute();
 
-  if (loading || !href) return null;
+  if (loading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#fff",
+        }}
+      >
+        <ActivityIndicator />
+      </View>
+    );
+  }
 
-  if (!href.startsWith("/(tabs)")) {
+  if (!href) {
+    return null;
+  }
+
+  if (href !== "/(tabs)/home") {
     return <Redirect href={href} />;
   }
 
@@ -17,39 +35,66 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarHideOnKeyboard: true,
-        sceneStyle: { backgroundColor: "#fff" },
+        tabBarActiveTintColor: "#145437",
+        tabBarInactiveTintColor: "rgba(0,0,0,0.45)",
+        tabBarStyle: {
+          height: 86,
+          paddingTop: 8,
+          paddingBottom: 18,
+          backgroundColor: "#fff",
+          borderTopColor: "rgba(0,0,0,0.06)",
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "700",
+        },
       }}
-      tabBar={(props) => <FloatingTabBar {...props} />}
     >
-      <Tabs.Screen name="home" options={{ title: "Home" }} />
-      <Tabs.Screen name="bestand" options={{ title: "Bestand" }} />
-      <Tabs.Screen name="neu" options={{ title: "Neu" }} />
-      <Tabs.Screen name="aufgaben" options={{ title: "Aufgaben" }} />
-      <Tabs.Screen name="mehr" options={{ title: "Mehr" }} />
+      <Tabs.Screen
+        name="home"
+        options={{
+          title: "Home",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="bestand"
+        options={{
+          title: "Bestand",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="archive" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="neu"
+        options={{
+          title: "Neu",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="plus-circle" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="aufgaben"
+        options={{
+          title: "Aufgaben",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="check-square" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="mehr"
+        options={{
+          title: "Mehr",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="menu" size={size} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
-
-// import { Tabs } from "expo-router";
-// import { FloatingTabBar } from "@/src/components/navigation/FloatingTabBar";
-
-// export default function TabsLayout() {
-//   return (
-//     <Tabs
-//       screenOptions={{
-//         headerShown: false,
-//         tabBarHideOnKeyboard: true,
-//         //globaler Tabs-Screen-Background
-//         sceneStyle: { backgroundColor: "#fff" },
-//       }}
-//       tabBar={(props) => <FloatingTabBar {...props} />}
-//     >
-//       <Tabs.Screen name="home/index" options={{ title: "Home" }} />
-//       <Tabs.Screen name="bestand/index" options={{ title: "Bestand" }} />
-//       <Tabs.Screen name="neu/index" options={{ title: "Neu" }} />
-//       <Tabs.Screen name="aufgaben/index" options={{ title: "Aufgaben" }} />
-//       <Tabs.Screen name="mehr/dev-user" options={{ title: "Mehr" }} />
-//     </Tabs>
-//   );
-// }

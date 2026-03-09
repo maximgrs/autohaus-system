@@ -1,5 +1,3 @@
-// src/features/tasks/v3/types.ts
-
 export type TaskStatus =
     | "open"
     | "in_progress"
@@ -29,14 +27,24 @@ export type TaskListItem = {
 
 export type MechanicFilter = "all" | "open" | "in_progress" | "done";
 
+export type TaskVisibilityScope = {
+    accountType: "shared" | "individual";
+    selectedEmployeeId: string | null;
+};
+
 export type ListMechanicTasksArgs = {
     filter: MechanicFilter;
+    scope: TaskVisibilityScope;
 };
 
 export type ListDetailerQueueArgs = {
     /**
-     * If omitted, we use the “current app defaults”.
-     * This will be adjusted when we migrate the old service in Step 4.
+     * If omitted, detailer defaults are used.
      */
     types?: string[];
+
+    /**
+     * Visibility is driven by current session/account mode.
+     */
+    scope: TaskVisibilityScope;
 };

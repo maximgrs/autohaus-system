@@ -1,27 +1,26 @@
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import React from "react";
+import { ActivityIndicator, View } from "react-native";
 import { Redirect } from "expo-router";
 
-import Screen from "@/src/components/ui/Screen";
-import { useAppEntryRoute } from "@/src/features/session/useAppEntryRoute";
+import { useAppEntryRoute } from "@/src/features/session";
 
-export default function Entry() {
+export default function IndexPage() {
   const { loading, href } = useAppEntryRoute();
 
   if (loading || !href) {
     return (
-      <Screen variant="scroll" bottomSpace={120}>
-        <View style={styles.center}>
-          <ActivityIndicator />
-          <Text style={styles.muted}>Lade…</Text>
-        </View>
-      </Screen>
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#fff",
+        }}
+      >
+        <ActivityIndicator />
+      </View>
     );
   }
 
   return <Redirect href={href} />;
 }
-
-const styles = StyleSheet.create({
-  center: { paddingHorizontal: 20, paddingTop: 24, gap: 12 },
-  muted: { fontSize: 13, fontWeight: "700", color: "rgba(0,0,0,0.55)" },
-});

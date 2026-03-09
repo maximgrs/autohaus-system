@@ -1,43 +1,56 @@
-// src/features/tasks/v3/tasks.queries.ts
 import { useQuery } from "@tanstack/react-query";
 
+import { useTaskVisibilityScope } from "@/src/features/tasks/hooks/useTaskVisibilityScope";
 import {
-    type DetailerQueueItem,
-    fetchDetailerQueue,
-} from "@/src/features/tasks/detailerQueue.service";
+    listDetailerQueueV3,
+    listMechanicPrepTasksV3,
+} from "@/src/features/tasks/v3/tasks.repository";
+import type {
+    MechanicFilter,
+    TaskListItem,
+    TaskVisibilityScope,
+} from "@/src/features/tasks/v3/types";
 
-import {
-    fetchMechanicPrepTasks,
-    type MechanicFilter,
-    type MechanicTaskListItem,
-} from "@/src/features/tasks/mechanicDashboard.service";
+export type DetailerQueueItem = TaskListItem;
+export type MechanicTaskListItem = TaskListItem;
 
-// ---- Query keys (exported) ----
 export const detailerQueueQueryKey = ["tasks", "detailerQueue"] as const;
-
 export const mechanicQueueQueryKeyBase = ["tasks", "mechanicQueue"] as const;
 
-export function mechanicQueueQueryKey(filter: MechanicFilter) {
-    return [...mechanicQueueQueryKeyBase, filter] as const;
+function scopeKey(scope: TaskVisibilityScope) {
+    return [
+        scope.accountType,
+        scope.selectedEmployeeId ?? "none",
+    ] as const;
 }
 
-// ---- Queries ----
+export function mechanicQueueQueryKey(
+    filter: MechanicFilter,
+    scope: TaskVisibilityScope,
+) {
+    return [...mechanicQueueQueryKeyBase, filter, ...scopeKey(scope)] as const;
+}
+
 export function useDetailerQueueQuery() {
-    return useQuery<DetailerQueueItem[], Error>({
-        queryKey: detailerQueueQueryKey,
-        queryFn: fetchDetailerQueue,
+    const scope = useTaskVisibilityScope();
+
+    return useQuery({
+        queryKey: [...detailerQueueQueryKey, ...scopeKey(scope)],
+        queryFn: () => listDetailerQueueV3({ scope }),
         staleTime: 30_000,
         gcTime: 5 * 60 * 1000,
     });
 }
 
 export function useMechanicPrepTasksQuery(filter: MechanicFilter) {
-    return useQuery<MechanicTaskListItem[], Error>({
-        queryKey: mechanicQueueQueryKey(filter),
-        queryFn: () => fetchMechanicPrepTasks({ filter }),
+    const scope = useTaskVisibilityScope();
+
+    return useQuery({
+        queryKey: mechanicQueueQueryKey(filter, scope),
+        queryFn: () => listMechanicPrepTasksV3({ filter, scope }),
         staleTime: 30_000,
         gcTime: 5 * 60 * 1000,
     });
 }
 
-export type { DetailerQueueItem, MechanicFilter, MechanicTaskListItem };
+export type { MechanicFilter, TaskVisibilityScope };

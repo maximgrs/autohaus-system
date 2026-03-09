@@ -90,7 +90,7 @@ function moneyDisplay(n: number | null) {
  * - wenn gar nichts gewählt -> 2 (Vertragstext sagt: default Klasse 2)
  * - sonst Durchschnitt der vorhandenen Klassen, aufrunden (ceil), 1..4 clamp
  */
-function computeOverallClass(vals: Array<ClassValue | null>) {
+function computeOverallClass(vals: (ClassValue | null)[]) {
   const nums = vals
     .map((v) => (v ? Number(v) : null))
     .filter((x): x is number => typeof x === "number" && !Number.isNaN(x));

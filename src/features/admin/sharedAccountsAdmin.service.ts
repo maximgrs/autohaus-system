@@ -7,20 +7,20 @@ export type EmployeeRole =
     | "detailer"
     | "listing";
 
+export type SharedAccountEmployeeRow = {
+    id: string;
+    display_name: string;
+    role: EmployeeRole;
+    active: boolean;
+};
+
 export type SharedAccountRow = {
     user_id: string;
     email: string;
     role: EmployeeRole;
     active: boolean;
     created_at: string;
-    employees: Array<
-        {
-            id: string;
-            display_name: string;
-            role: EmployeeRole;
-            active: boolean;
-        }
-    >;
+    employees: SharedAccountEmployeeRow[];
 };
 
 export async function adminCreateSharedAccount(params: {

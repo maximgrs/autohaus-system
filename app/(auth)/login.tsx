@@ -1,159 +1,209 @@
-import React, { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { Redirect } from "expo-router";
 
-import Screen from "@/src/components/ui/Screen";
-import TextField from "@/src/components/ui/TextField";
-import AppButton from "@/src/components/ui/AppButton";
 import { supabase } from "@/src/lib/supabase";
-
-const UI = {
-  green: "#145437",
-  text: "#000",
-  muted: "rgba(0,0,0,0.55)",
-} as const;
+import { useSessionRequirement } from "@/src/features/session";
 
 export default function LoginScreen() {
+  const { requirement, href } = useSessionRequirement();
+
   const [email, setEmail] = useState("");
-  const [pw, setPw] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
 
-  const canSubmit = useMemo(() => {
-    const e = email.trim();
-    return e.length > 3 && pw.trim().length >= 6;
-  }, [email, pw]);
+  const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
 
-  const onLogin = useCallback(async () => {
-    const e = email.trim();
-    const p = pw.trim();
+  useEffect(() => {
+    if (errorText) {
+      setErrorText(null);
+    }
+  }, [email, password, errorText]);
 
-    if (!e || !p) {
-      Alert.alert("Fehlt etwas", "Bitte E-Mail und Passwort eingeben.");
+  const onSubmit = useCallback(async () => {
+    if (!normalizedEmail || !password) {
+      setErrorText("Bitte E-Mail und Passwort eingeben.");
       return;
     }
 
-    setLoading(true);
+    setSubmitting(true);
+    setErrorText(null);
+
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        email: e,
-        password: p,
+        email: normalizedEmail,
+        password,
       });
-      if (error) throw error;
 
-      // App index gate übernimmt routing
-      router.replace("/");
+      if (error) {
+        throw error;
+      }
     } catch (err: any) {
-      Alert.alert("Login fehlgeschlagen", err?.message ?? "Unbekannter Fehler");
+      setErrorText(err?.message ?? "Login fehlgeschlagen.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
-  }, [email, pw]);
+  }, [normalizedEmail, password]);
 
-  const onForgot = useCallback(async () => {
-    const e = email.trim();
-    if (!e) {
-      Alert.alert("E-Mail fehlt", "Bitte zuerst deine E-Mail eingeben.");
-      return;
-    }
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(e);
-      if (error) throw error;
-      Alert.alert("E-Mail gesendet", "Bitte Postfach prüfen (Reset-Link).");
-    } catch (err: any) {
-      Alert.alert("Fehler", err?.message ?? "Konnte Reset nicht starten.");
-    }
-  }, [email]);
+  if (requirement === "ready" && href) {
+    return <Redirect href={href} />;
+  }
+
+  if (requirement === "select-employee") {
+    return <Redirect href="/(auth)/select-employee" />;
+  }
 
   return (
-    <Screen variant="scroll" bottomSpace={120}>
-      <View style={styles.wrap}>
-        <Text style={styles.title}>T und A Autoshop</Text>
+    <KeyboardAvoidingView
+      style={styles.keyboard}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <View style={styles.container}>
+        <View style={styles.hero}>
+          <Text style={styles.eyebrow}>Autohaus System</Text>
+          <Text style={styles.title}>Anmelden</Text>
+          <Text style={styles.subtitle}>
+            Melde dich mit deinem Konto an, um fortzufahren.
+          </Text>
+        </View>
 
         <View style={styles.form}>
-          <TextField
-            label="E-Mail"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="e-mail eingeben"
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
+          <View style={styles.field}>
+            <Text style={styles.label}>E-Mail</Text>
+            <TextInput
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="name@firma.com"
+              placeholderTextColor="rgba(0,0,0,0.35)"
+              style={styles.input}
+            />
+          </View>
 
-          <TextField
-            label="Passwort"
-            value={pw}
-            onChangeText={setPw}
-            placeholder="passwort eingeben"
-            secureTextEntry
-            autoCapitalize="none"
-          />
+          <View style={styles.field}>
+            <Text style={styles.label}>Passwort</Text>
+            <TextInput
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+              placeholder="••••••••"
+              placeholderTextColor="rgba(0,0,0,0.35)"
+              style={styles.input}
+            />
+          </View>
 
-          <Pressable
-            onPress={onForgot}
-            style={({ pressed }) => [
-              styles.forgot,
-              pressed ? { opacity: 0.8 } : null,
-            ]}
-          >
-            <Text style={styles.forgotText}>Passwort vergessen?</Text>
-          </Pressable>
-
-          <AppButton
-            title={loading ? "Anmelden…" : "Anmelden"}
-            onPress={onLogin}
-            disabled={loading || !canSubmit}
-          />
+          {errorText ? <Text style={styles.error}>{errorText}</Text> : null}
 
           <Pressable
-            onPress={() => router.push("/(auth)/register")}
+            onPress={() => {
+              void onSubmit();
+            }}
+            disabled={submitting}
             style={({ pressed }) => [
-              styles.linkBtn,
-              pressed ? { opacity: 0.85 } : null,
+              styles.button,
+              submitting ? styles.buttonDisabled : null,
+              pressed ? { opacity: 0.9 } : null,
             ]}
           >
-            <Text style={styles.linkText}>Neues Konto erstellen</Text>
+            {submitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Einloggen</Text>
+            )}
           </Pressable>
         </View>
       </View>
-    </Screen>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    paddingHorizontal: 26,
-    paddingTop: 120,
-    gap: 26,
+  keyboard: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  container: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 72,
+    paddingBottom: 32,
+    backgroundColor: "#fff",
+  },
+  hero: {
+    gap: 8,
+    marginBottom: 32,
+  },
+  eyebrow: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+    color: "#145437",
+    textTransform: "uppercase",
   },
   title: {
-    textAlign: "center",
-    fontSize: 22,
-    fontWeight: "800",
-    color: UI.text,
+    fontSize: 32,
+    fontWeight: "900",
+    color: "#000",
+  },
+  subtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "600",
+    color: "rgba(0,0,0,0.55)",
   },
   form: {
     gap: 16,
   },
-  forgot: {
-    alignSelf: "flex-end",
-    marginTop: -2,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+  field: {
+    gap: 8,
   },
-  forgotText: {
-    color: UI.muted,
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  linkBtn: {
-    alignSelf: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-  },
-  linkText: {
-    color: UI.text,
-    fontWeight: "800",
+  label: {
     fontSize: 13,
+    fontWeight: "800",
+    color: "#000",
+  },
+  input: {
+    height: 52,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    backgroundColor: "rgba(0,0,0,0.04)",
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#000",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  error: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#B42318",
+  },
+  button: {
+    marginTop: 4,
+    height: 52,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#145437",
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  buttonText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#fff",
   },
 });

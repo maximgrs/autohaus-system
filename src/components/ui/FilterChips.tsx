@@ -16,13 +16,10 @@ type Props<T extends string> = {
 const TOKENS = {
   greenFrom: "#145437",
   greenTo: "#2F763E",
-
   grayFrom: "#F0F0F0",
   grayTo: "#EDEDED",
-
   text: "#000000",
   textActive: "#FFFFFF",
-
   radius: 999,
   shadowColor: "#000",
   shadowOpacity: 0.12,
@@ -40,7 +37,6 @@ function FilterChipsBase<T extends string>({
     <View style={styles.row}>
       {options.map((opt) => {
         const active = opt.key === value;
-
         const grad = active
           ? ([TOKENS.greenFrom, TOKENS.greenTo] as const)
           : ([TOKENS.grayFrom, TOKENS.grayTo] as const);
@@ -51,16 +47,11 @@ function FilterChipsBase<T extends string>({
             onPress={() => onChange(opt.key)}
             style={({ pressed }) => [
               styles.chipShadow,
-              pressed && { opacity: 0.88 },
+              pressed ? { opacity: 0.88 } : null,
             ]}
             hitSlop={10}
           >
-            <LinearGradient
-              colors={grad}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }} // diagonal
-              style={styles.chip}
-            >
+            <LinearGradient colors={grad} style={styles.chip}>
               <Text
                 style={[
                   styles.label,
@@ -77,15 +68,14 @@ function FilterChipsBase<T extends string>({
   );
 }
 
-export default memo(FilterChipsBase) as typeof FilterChipsBase;
+const FilterChips = memo(FilterChipsBase) as typeof FilterChipsBase;
+export default FilterChips;
 
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     gap: 10,
   },
-
-  // Shadow außen, damit Gradient nicht den Shadow kaputt macht
   chipShadow: {
     borderRadius: TOKENS.radius,
     shadowColor: TOKENS.shadowColor,
@@ -94,15 +84,12 @@ const styles = StyleSheet.create({
     shadowOffset: TOKENS.shadowOffset,
     elevation: TOKENS.elevation,
   },
-
-  // Gradient-Fläche
   chip: {
     borderRadius: TOKENS.radius,
     paddingHorizontal: 20,
     paddingVertical: 15,
     overflow: "hidden",
   },
-
   label: {
     fontSize: 13,
     fontWeight: "700",

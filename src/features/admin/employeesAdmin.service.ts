@@ -1,7 +1,7 @@
 import { supabase } from "@/src/lib/supabase";
 import { invokeAdmin } from "@/src/features/admin/adminInvoke";
 
-export type EmployeeRole =
+type EmployeeRole =
     | "admin"
     | "dealer"
     | "mechanic"

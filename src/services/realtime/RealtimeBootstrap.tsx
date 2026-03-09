@@ -1,7 +1,4 @@
-// src/services/realtime/RealtimeBootstrap.tsx
-import React from "react";
-
-import { useTasksRealtimeInvalidation } from "@/src/services/realtime/useTasksRealtimeInvalidation";
+import { useTasksRealtimeInvalidation } from "@/src/features/tasks/realtime/useTasksRealtimeInvalidation";
 
 export default function RealtimeBootstrap() {
   useTasksRealtimeInvalidation();
